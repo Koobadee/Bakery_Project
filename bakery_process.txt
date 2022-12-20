@@ -1,0 +1,173 @@
+
+Libraries used:
+
+> library(tidyverse)
+
+Data Exploration:
+
+### To begin, we need to import the dataset we will be working with after is downloaded and set up in the directory we will be using. I import the dataset as follows;
+
+> bakery_sales <- read.csv("Bakery_sales.csv")
+
+### I want to get a very surface level understanding of our data for any clues of inconsistencies in the data before we begin cleaning. I do so with the following functions;
+
+> head(bakery_sales)
+> tail(bakery_sales)
+
+### Initial exploration of the "head" and "tail" of the dataset shows some interesting tidbits of information regarding the observations. Firstly, the column names are "X", "date", "time", "ticket_number", "article", "Quantity" and "unit_price".
+
+### The "X" column appears to be an index for items sold as it starts at 0 and ends at 511395. We will ignore this column for now.
+
+### The date column appears to have a timeframe starting on 2021-01-02(January 02, 2021) until 2022-09-30(August 03, 2022) which gives us approximately 606 days of observations. In order to verify the amount of days we have in the dataset, we can use the "length" and "unique" functions together to count individual days.
+
+> length(unique(bakery_sales$date))
+[1] 600
+
+### This gives us a total of 600 which is different from the total days between our start and end dates which would be a total of 606 days. We will assume for now that the missing days were ones in which the business was closed.
+
+### The column "time" appears to be the value for when each order was entered into the P.O.S.(point of sale) system. To get a better idea of when the business is operational, we can do a quick "min" and "max" of the values to find the earliest and latest order entered into the system
+
+> min(bakery_sales$time)
+[1] "07:01"
+> max(bakery_sales$time)
+[1] "20:01"
+
+### Now we know that the window for orders entered into the system is between 7:01am and 8:01pm. We can move on to the column "ticket_number". 
+
+### The column "ticket_number" starts with a value of 150040 and ends with 288913 which we can see from the previous functions "head" and "tail". We can also see the first pattern in our data emerge as values in this column repeat and those duplicates also share a value in the "time" column which likely means that any observations in the dataset that share a ticket_number are not simply duplicates but orders made by customers including multiple items which we can verify later. First, let's subtract the largest and smallest values in the "ticket_number" column to see how many orders the business has taken in this time frame. 
+
+> max(bakery_sales$ticket_number)-min(bakery_sales$ticket_number)
+[1] 138873
+
+### The output 138873 should mean we have as many unique orders in the dataset. To quickly verify, we can use the "unique" and "length" functions again to count the unique orders we have.
+
+> length(unique(bakery_sales$ticket_number))
+[1] 136451
+
+### We have now come across our first discrepancy in the dataset. According to the values in the "ticket_number" column, we should have 138873 orders but by actually counting the unique values we have 136451. A difference of 2422! Potentially, this could mean that we have 2422 missing orders in our dataset although the discrepancy could also be explained by refunds or incorrect/voided orders which could be the reason for the missing values. We will keep a note of this but move on for now.
+
+### Examining the article column now, it seems the column consists of unique sales items that are a part of an order, as different "article" values share values under the previously examined "ticket_number" column. To better understand the parameters of the column, let us check the unique menu items that have been input into the POS and sort those alphabetically to easier identify trends/outliers.
+
+> bakery_sales %>% pull(article) %>% unique() %>% sort()
+
+### We can quickly spot some potential issues and contexts that will need further investigation but for now we only want to take notes of surface observations which will need further investigation. First, we have two suspect values "." and "THE". let's filter for each of these values separately to better understand them.
+
+> filter(bakery_sales, article == ".")
+       X       date  time ticket_number article Quantity unit_price
+1  33726 2021-03-04 12:32        159219       .        2     0,00 €
+2  43541 2021-03-18 12:59        161853       .        1     0,00 €
+3  54650 2021-04-04 09:53        164878       .        1     0,00 €
+4  73667 2021-04-27 16:48        170079       .        1     0,00 €
+5 135091 2021-07-10 13:25        186662       .        2     0,00 €
+
+> filter(bakery_sales, article == "THE")
+       X       date  time ticket_number article Quantity unit_price
+1  17095 2021-02-06 17:20        154751     THE        2     1,50 €
+2  58889 2021-04-10 09:38        166028     THE        1     1,50 €
+3  92403 2021-05-21 10:25        175076     THE        1     1,50 €
+4  96410 2021-05-25 07:52        176111     THE        1     1,50 €
+5 210129 2021-09-04 10:56        206660     THE        1     1,50 €
+6 264566 2021-11-21 10:36        221557     THE        1     1,50 €
+
+### The results here show interesting results in that the values "." are returning a "unit_price" of 0,00 € and "THE" values return 1,50 € in their respective observations. Nothing seems too peculiar with the data here so we will move on for now and return for further investigation when we start our data cleaning.
+
+### The "Quantity" column seems like it will be a fairly straightforward column to explore. Let's begin by looking at unique values and sorting them for any curious results.
+
+> bakery_sales %>% pull(Quantity) %>% unique() %>% sort()
+ [1] -200  -18  -17  -13  -12  -10   -9   -8   -7   -6   -5   -4   -3   -2   -1    1    2    3    4    5    6    7    8
+[24]    9   10   11   12   13   14   15   16   17   18   20   21   25   43   50   55  200
+
+### Surprisingly, we have some negative values which could simply indicate refunds although as noted earlier when exploring the "ticket_number" column, we already have potential indicators of refunds there as well and we should compare the results from those columns to try and identify what is causing the inconsistencies in the dataset.
+
+Interestingly, every negative integer from our previous function appears as a positive integer as well, which makes me think that these negative quantity numbers are refunds that follow the corresponding positive numbers. Let's filter for the largest negative quantity to find the other data in the observation.
+
+> filter(bakery_sales, Quantity == "-200")
+       X       date  time ticket_number     article Quantity unit_price
+1 110378 2021-06-12 09:58        179932 CAFE OU EAU     -200     1,00 €
+
+### Now that we have this observation, let us filter for the preceeding "ticket_number" and see what we get;
+
+> filter(bakery_sales, ticket_number == "179931")
+       X       date  time ticket_number     article Quantity unit_price
+1 110375 2021-06-12 09:58        179931 CAFE OU EAU      200     1,00 €
+
+### Our instincts have proven correct and it appears the negative integers we received when looking at the "Quantity" column appear to be refunds. We will go further in depth when we begin cleaning and wrangling our data. For now, let's move on to the last column.
+
+### The "unit_price" column appears to be self explanatory in that it shows the sales price for the corresponding "article" column. Unfortunately, it looks like the column will be difficult to work with numerically as the prices are printed with two delimeters (a comma and then a space) followed by the symbol for euro. Here is an example; "0,90 €". In order to properly work with the numbers in this column, we will need to transform this entire column into a more usable format. First, let us filter this entire column for unique values to spot anything out of the ordinary.
+
+> bakery_sales %>% pull(unit_price) %>% unique() %>% sort()
+  [1] "0,00 €"  "0,07 €"  "0,15 €"  "0,25 €"  "0,30 €"  "0,33 €"  "0,40 €"  "0,45 €"  "0,50 €"  "0,60 €"  "0,65 €" 
+ [12] "0,70 €"  "0,75 €"  "0,80 €"  "0,90 €"  "0,95 €"  "1,00 €"  "1,05 €"  "1,10 €"  "1,15 €"  "1,20 €"  "1,25 €" 
+ [23] "1,30 €"  "1,35 €"  "1,40 €"  "1,50 €"  "1,60 €"  "1,70 €"  "1,80 €"  "1,90 €"  "10,00 €" "10,30 €" "10,40 €"
+ [34] "10,50 €" "10,60 €" "11,00 €" "11,10 €" "11,62 €" "11,65 €" "12,00 €" "12,50 €" "12,60 €" "13,00 €" "13,50 €"
+ [45] "14,00 €" "14,50 €" "14,60 €" "14,65 €" "15,00 €" "15,20 €" "15,60 €" "16,00 €" "16,60 €" "17,00 €" "17,10 €"
+ [56] "18,00 €" "2,00 €"  "2,10 €"  "2,20 €"  "2,30 €"  "2,40 €"  "2,50 €"  "2,60 €"  "2,70 €"  "2,80 €"  "20,60 €"
+ [67] "21,00 €" "21,60 €" "22,00 €" "22,50 €" "22,80 €" "23,60 €" "24,00 €" "26,00 €" "28,00 €" "3,00 €"  "3,20 €" 
+ [78] "3,30 €"  "3,50 €"  "3,60 €"  "3,75 €"  "30,00 €" "35,00 €" "4,00 €"  "4,20 €"  "4,40 €"  "4,50 €"  "4,70 €" 
+ [89] "4,75 €"  "4,80 €"  "4,90 €"  "44,00 €" "5,00 €"  "5,20 €"  "5,30 €"  "5,32 €"  "5,40 €"  "5,45 €"  "5,50 €" 
+[100] "5,70 €"  "5,80 €"  "6,00 €"  "6,40 €"  "6,50 €"  "6,60 €"  "6,80 €"  "6,85 €"  "60,00 €" "7,00 €"  "7,30 €" 
+[111] "7,50 €"  "7,60 €"  "8,00 €"  "8,30 €"  "8,50 €"  "8,60 €"  "8,90 €"  "9,00 €"  "9,10 €"  "9,30 €"  "9,50 €" 
+[122] "9,60 €"  "9,80 €" 
+
+### Great! None of the values here look out of the ordinary and do not indicate that any of the observations or values will not be usable. Let's move on to cleaning and wrangling our data.
+
+Now that we have explored our dataset to understand it a little better and identity any quirks with the data, we can move to cleaning our dataset so that we may begin analyzing and turning our data into actionable insights.
+
+Data Cleaning:
+
+### Let's begin by creating a new dataframe and remove any duplicates so that we can leave the original dataframe as a reference in case anything goes wrong.
+
+> sales <- bakery_sales %>% 
++     distinct(.keep_all = TRUE)
+
+### With this new dataframe, I want to immediately address the "unit_price" column as it will be very difficult to work with in the format that it is in. Ideally, we want to change the format from "0,90 €" to "0.90". In order to do so, we must remove the space and euro symbol after the value and change the comma to a decimal. We also want to change the class from a character to a numeric variable. We will do this with a function.
+
+unit_price_change <- function(x){
+  x |>
+    str_remove('\\s€$') |>
+    str_replace(',', '\\.') |>
+    as.numeric()
+}
+
+### Now that we have our function that does what we need, we simply apply it and create a new variable column in our "sales" dataframe named "item_price". Let's also remove the "unit_price" column and rename the "Quantity" column to "order_qty".
+
+> sales$item_price <- unit_price_change(sales$unit_price)
+
+> sales <- subset(sales, select = -c(unit_price))
+
+> colnames(sales)[6] <- "order_qty"
+
+### Now let's apply a quick multiplication operation to get the order total for each item by multiplying the "order_qty" by the "item_price".
+
+> sales <- sales %>% 
++     mutate(item_order_total = order_qty*item_price)
+
+### Let's manipulate the "article" column now by changing the name to "item" and changing the entire column to lower case.
+
+> colnames(sales)[5] <- "item"
+
+> sales$item <- str_to_lower(sales$item)
+
+### We can remove the first column named "...1" as it appears to be an index but we will not be using it for our purposes in this scenario.
+
+sales <- subset(sales, select = -c(...1))
+
+### As we will need to establish time of day sales trends as requested, it will be helpful to create a weekday column to specify the trends over multiple weeks on the same weekday. We need to load the lubridate package to do so.
+
+> library(lubridate)
+> sales <- sales %>% 
++     mutate(weekday = wday(sales$date, label=TRUE, abbr = FALSE))
+
+### Let's repeat the process now but for the month as well.
+
+> sales <- sales %>% 
++     mutate(month = month(sales$date, label = TRUE, abbr = FALSE))
+
+### Let's now reorder our columns so that the date column is immediately followed by the month then weekday column we just created.
+
+> sales <- sales %>% 
++     select(date, weekday, everything())
+
+### This seems to be all that we need for now, so let's write the file as a csv.
+
+> write_csv(sales, "C:\\Users\\Dave\\Documents\\Data Projects\\Bakery\\Bakery\\clean_bakery_sales.csv")

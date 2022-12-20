@@ -1,0 +1,45 @@
+Data Exploration:
+
+> library(tidyverse)
+> bakery_sales <- read.csv("Bakery_sales.csv")
+> head(bakery_sales)
+> tail(bakery_sales)
+> length(unique(bakery_sales$date))
+> min(bakery_sales$time)
+> max(bakery_sales$time)
+> max(bakery_sales$ticket_number)-min(bakery_sales$ticket_number)
+> length(unique(bakery_sales$ticket_number))
+> bakery_sales %>% pull(article) %>% unique() %>% sort()
+> filter(bakery_sales, article == ".")
+> filter(bakery_sales, article == "THE")
+> bakery_sales %>% pull(Quantity) %>% unique() %>% sort()
+> filter(bakery_sales, Quantity == "-200")
+> filter(bakery_sales, ticket_number == "179931")
+> bakery_sales %>% pull(unit_price) %>% unique() %>% sort()
+
+Data Cleaning:
+
+> sales <- bakery_sales %>% 
++     distinct(.keep_all = TRUE)
+unit_price_change <- function(x){
+  x |>
+    str_remove('\\s€$') |>
+    str_replace(',', '\\.') |>
+    as.numeric()
+}
+> sales$item_price <- unit_price_change(sales$unit_price)
+> sales <- subset(sales, select = -c(unit_price))
+> colnames(sales)[6] <- "order_qty"
+> sales <- sales %>% 
++     mutate(item_order_total = order_qty*item_price)
+> colnames(sales)[5] <- "item"
+> sales$item <- str_to_lower(sales$item)
+sales <- subset(sales, select = -c(...1))
+> library(lubridate)
+> sales <- sales %>% 
++     mutate(weekday = wday(sales$date, label=TRUE, abbr = FALSE))
+> sales <- sales %>% 
++     mutate(month = month(sales$date, label = TRUE, abbr = FALSE))
+> sales <- sales %>% 
++     select(date, weekday, everything())
+> write_csv(sales, "C:\\Users\\Dave\\Documents\\Data Projects\\Bakery\\Bakery\\clean_bakery_sales.csv")
